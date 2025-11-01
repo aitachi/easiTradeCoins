@@ -66,7 +66,7 @@ CREATE TABLE IF NOT EXISTS orders (
     user_id BIGINT UNSIGNED NOT NULL,
     symbol VARCHAR(20) NOT NULL,
     side VARCHAR(4) NOT NULL COMMENT 'buy/sell',
-    type VARCHAR(10) NOT NULL COMMENT 'limit/market',
+    type VARCHAR(20) NOT NULL COMMENT 'limit/market/stop_loss/take_profit/stop_limit/trailing_stop',
     price DECIMAL(36, 18),
     quantity DECIMAL(36, 18) NOT NULL,
     filled_qty DECIMAL(36, 18) DEFAULT 0.000000000000000000,
@@ -76,6 +76,15 @@ CREATE TABLE IF NOT EXISTS orders (
     fee_currency VARCHAR(20),
     status VARCHAR(10) COMMENT 'pending/partial/filled/cancelled',
     time_in_force VARCHAR(3) COMMENT 'GTC/IOC/FOK',
+
+    -- Stop-loss and Take-profit fields
+    stop_price DECIMAL(36, 18) COMMENT '止损/止盈触发价格',
+    take_profit_price DECIMAL(36, 18) COMMENT '止盈价格',
+    trailing_delta DECIMAL(36, 18) COMMENT '跟踪止损价差',
+    trigger_condition VARCHAR(10) COMMENT '>=, <=',
+    is_triggered BOOLEAN DEFAULT FALSE COMMENT '是否已触发',
+    trigger_time DATETIME COMMENT '触发时间',
+
     create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
     update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_user_id (user_id),
@@ -84,6 +93,7 @@ CREATE TABLE IF NOT EXISTS orders (
     INDEX idx_create_time (create_time DESC),
     INDEX idx_user_symbol (user_id, symbol),
     INDEX idx_user_status_create_time (user_id, status, create_time DESC),
+    INDEX idx_type_is_triggered (type, is_triggered),
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 

@@ -19,8 +19,12 @@ const (
 type OrderType string
 
 const (
-	OrderTypeLimit  OrderType = "limit"
-	OrderTypeMarket OrderType = "market"
+	OrderTypeLimit       OrderType = "limit"        // 限价单
+	OrderTypeMarket      OrderType = "market"       // 市价单
+	OrderTypeStopLoss    OrderType = "stop_loss"    // 止损单
+	OrderTypeTakeProfit  OrderType = "take_profit"  // 止盈单
+	OrderTypeStopLimit   OrderType = "stop_limit"   // 止损限价单
+	OrderTypeTrailingStop OrderType = "trailing_stop" // 跟踪止损
 )
 
 // OrderStatus represents order status
@@ -58,6 +62,15 @@ type Order struct {
 	FeeCurrency   string          `json:"fee_currency"`
 	Status        OrderStatus     `json:"status" gorm:"index"`
 	TimeInForce   TimeInForce     `json:"time_in_force"`
+
+	// Stop-loss and Take-profit fields
+	StopPrice     *decimal.Decimal `json:"stop_price,omitempty" gorm:"type:decimal(36,18)"` // 触发价格
+	TakeProfitPrice *decimal.Decimal `json:"take_profit_price,omitempty" gorm:"type:decimal(36,18)"` // 止盈价
+	TrailingDelta *decimal.Decimal `json:"trailing_delta,omitempty" gorm:"type:decimal(36,18)"` // 跟踪止损价差
+	TriggerCondition string        `json:"trigger_condition,omitempty"` // 触发条件: >=, <=
+	IsTriggered   bool             `json:"is_triggered" gorm:"default:false"` // 是否已触发
+	TriggerTime   *time.Time       `json:"trigger_time,omitempty"` // 触发时间
+
 	CreateTime    time.Time       `json:"create_time" gorm:"index"`
 	UpdateTime    time.Time       `json:"update_time"`
 }
