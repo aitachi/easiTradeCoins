@@ -26,38 +26,49 @@ func NewOrderService(engine *matching.MatchingEngine, assetService *AssetService
 
 // CreateOrder creates a new order
 func (s *OrderService) CreateOrder(order *models.Order) (*models.Order, []*models.Trade, error) {
-	// Validate user has sufficient balance
-	if err := s.validateOrderBalance(order); err != nil {
-		return nil, nil, err
-	}
+	var trades []*models.Trade
 
-	// Freeze assets
-	if err := s.freezeOrderAssets(order); err != nil {
-		return nil, nil, err
-	}
-
-	// Process order in matching engine
-	trades, err := s.engine.ProcessOrder(order)
-	if err != nil {
-		// Unfreeze assets on error
-		s.unfreezeOrderAssets(order)
-		return nil, nil, err
-	}
-
-	// Save order to database
-	if err := database.DB.Create(order).Error; err != nil {
-		return nil, nil, err
-	}
-
-	// Save trades to database
-	for _, trade := range trades {
-		if err := database.DB.Create(trade).Error; err != nil {
-			// Log error but don't fail the order
-			continue
+	// Use database transaction for entire order creation process
+	err := database.DB.Transaction(func(tx *gorm.DB) error {
+		// Validate user has sufficient balance
+		if err := s.validateOrderBalance(order); err != nil {
+			return err
 		}
 
-		// Update user assets based on trades
-		s.processTradeSettlement(trade)
+		// Freeze assets within transaction
+		if err := s.freezeOrderAssetsWithTx(tx, order); err != nil {
+			return err
+		}
+
+		// Process order in matching engine
+		matchedTrades, err := s.engine.ProcessOrder(order)
+		if err != nil {
+			return err
+		}
+		trades = matchedTrades
+
+		// Save order to database
+		if err := tx.Create(order).Error; err != nil {
+			return err
+		}
+
+		// Save trades to database
+		for _, trade := range trades {
+			if err := tx.Create(trade).Error; err != nil {
+				return err // Fail entire transaction if trade save fails
+			}
+
+			// Update user assets based on trades within transaction
+			if err := s.processTradeSettlementWithTx(tx, trade); err != nil {
+				return err
+			}
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return nil, nil, err
 	}
 
 	return order, trades, nil
@@ -298,4 +309,83 @@ func (s *OrderService) processTradeSettlement(trade *models.Trade) error {
 
 		return nil
 	})
+}
+
+// freezeOrderAssetsWithTx freezes assets for an order within a transaction
+func (s *OrderService) freezeOrderAssetsWithTx(tx *gorm.DB, order *models.Order) error {
+	var pair models.TradingPair
+	if err := tx.Where("symbol = ?", order.Symbol).First(&pair).Error; err != nil {
+		return err
+	}
+
+	var currency string
+	var amount = order.Quantity
+
+	if order.Side == models.OrderSideBuy {
+		currency = pair.QuoteCurrency
+		if order.Type == models.OrderTypeLimit {
+			amount = order.Quantity.Mul(order.Price)
+		}
+	} else {
+		currency = pair.BaseCurrency
+	}
+
+	return s.assetService.FreezeAssetWithTx(tx, order.UserID, currency, "ERC20", amount)
+}
+
+// processTradeSettlementWithTx processes trade settlement within a transaction
+func (s *OrderService) processTradeSettlementWithTx(tx *gorm.DB, trade *models.Trade) error {
+	// Get trading pair
+	var pair models.TradingPair
+	if err := tx.Where("symbol = ?", trade.Symbol).First(&pair).Error; err != nil {
+		return err
+	}
+
+	// Update buyer assets (give base currency, take quote currency)
+	var buyerBaseAsset models.UserAsset
+	if err := tx.Where("user_id = ? AND currency = ? AND chain = ?",
+		trade.BuyerID, pair.BaseCurrency, "ERC20").First(&buyerBaseAsset).Error; err != nil {
+		return err
+	}
+
+	buyerBaseAsset.Available = buyerBaseAsset.Available.Add(trade.Quantity)
+	if err := tx.Save(&buyerBaseAsset).Error; err != nil {
+		return err
+	}
+
+	var buyerQuoteAsset models.UserAsset
+	if err := tx.Where("user_id = ? AND currency = ? AND chain = ?",
+		trade.BuyerID, pair.QuoteCurrency, "ERC20").First(&buyerQuoteAsset).Error; err != nil {
+		return err
+	}
+
+	buyerQuoteAsset.Frozen = buyerQuoteAsset.Frozen.Sub(trade.Amount.Add(trade.BuyerFee))
+	if err := tx.Save(&buyerQuoteAsset).Error; err != nil {
+		return err
+	}
+
+	// Update seller assets (take base currency, give quote currency)
+	var sellerBaseAsset models.UserAsset
+	if err := tx.Where("user_id = ? AND currency = ? AND chain = ?",
+		trade.SellerID, pair.BaseCurrency, "ERC20").First(&sellerBaseAsset).Error; err != nil {
+		return err
+	}
+
+	sellerBaseAsset.Frozen = sellerBaseAsset.Frozen.Sub(trade.Quantity.Add(trade.SellerFee))
+	if err := tx.Save(&sellerBaseAsset).Error; err != nil {
+		return err
+	}
+
+	var sellerQuoteAsset models.UserAsset
+	if err := tx.Where("user_id = ? AND currency = ? AND chain = ?",
+		trade.SellerID, pair.QuoteCurrency, "ERC20").First(&sellerQuoteAsset).Error; err != nil {
+		return err
+	}
+
+	sellerQuoteAsset.Available = sellerQuoteAsset.Available.Add(trade.Amount)
+	if err := tx.Save(&sellerQuoteAsset).Error; err != nil {
+		return err
+	}
+
+	return nil
 }

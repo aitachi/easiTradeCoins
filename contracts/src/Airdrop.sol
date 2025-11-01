@@ -22,6 +22,8 @@ contract Airdrop is Ownable, ReentrancyGuard, Pausable {
         uint256 endTime;
         bytes32 merkleRoot;
         bool active;
+        uint256 minClaimInterval; // Minimum time between claims (anti-sybil)
+        uint256 maxClaimPerAddress; // Maximum claims per address across campaigns
     }
 
     // Campaign ID counter
@@ -32,6 +34,15 @@ contract Airdrop is Ownable, ReentrancyGuard, Pausable {
 
     // Mapping from campaign ID to address to claimed status
     mapping(uint256 => mapping(address => bool)) public hasClaimed;
+
+    // Anti-sybil: Track total claims per address
+    mapping(address => uint256) public totalClaimsByAddress;
+
+    // Anti-sybil: Track last claim timestamp per address
+    mapping(address => uint256) public lastClaimTime;
+
+    // Anti-sybil: Global maximum claims per address
+    uint256 public globalMaxClaimsPerAddress = 10;
 
     // Events
     event CampaignCreated(
@@ -54,13 +65,22 @@ contract Airdrop is Ownable, ReentrancyGuard, Pausable {
 
     /**
      * @dev Create a new airdrop campaign
+     * @param tokenAddress Token contract address
+     * @param totalAmount Total amount to distribute
+     * @param startTime Campaign start time
+     * @param endTime Campaign end time
+     * @param merkleRoot Merkle tree root for verification
+     * @param minClaimInterval Minimum seconds between claims (0 = no limit)
+     * @param maxClaimPerAddress Max claims per address for this campaign (0 = no limit)
      */
     function createCampaign(
         address tokenAddress,
         uint256 totalAmount,
         uint256 startTime,
         uint256 endTime,
-        bytes32 merkleRoot
+        bytes32 merkleRoot,
+        uint256 minClaimInterval,
+        uint256 maxClaimPerAddress
     ) external onlyOwner returns (uint256) {
         require(tokenAddress != address(0), "Invalid token address");
         require(totalAmount > 0, "Invalid amount");
@@ -81,7 +101,9 @@ contract Airdrop is Ownable, ReentrancyGuard, Pausable {
             startTime: startTime,
             endTime: endTime,
             merkleRoot: merkleRoot,
-            active: true
+            active: true,
+            minClaimInterval: minClaimInterval,
+            maxClaimPerAddress: maxClaimPerAddress
         });
 
         emit CampaignCreated(campaignId, tokenAddress, totalAmount, startTime, endTime);
@@ -91,6 +113,9 @@ contract Airdrop is Ownable, ReentrancyGuard, Pausable {
 
     /**
      * @dev Claim airdrop tokens
+     * @param campaignId Campaign ID
+     * @param amount Amount to claim
+     * @param merkleProof Merkle proof for verification
      */
     function claim(
         uint256 campaignId,
@@ -105,12 +130,35 @@ contract Airdrop is Ownable, ReentrancyGuard, Pausable {
         require(!hasClaimed[campaignId][msg.sender], "Already claimed");
         require(amount > 0, "Invalid amount");
 
+        // Anti-sybil checks
+        require(
+            totalClaimsByAddress[msg.sender] < globalMaxClaimsPerAddress,
+            "Exceeded global claim limit"
+        );
+
+        if (campaign.minClaimInterval > 0) {
+            require(
+                block.timestamp >= lastClaimTime[msg.sender] + campaign.minClaimInterval,
+                "Claim too soon"
+            );
+        }
+
+        if (campaign.maxClaimPerAddress > 0) {
+            require(
+                totalClaimsByAddress[msg.sender] < campaign.maxClaimPerAddress,
+                "Exceeded campaign claim limit"
+            );
+        }
+
         // Verify merkle proof
         bytes32 leaf = keccak256(abi.encodePacked(msg.sender, amount));
         require(verifyMerkleProof(merkleProof, campaign.merkleRoot, leaf), "Invalid proof");
 
+        // Update state
         hasClaimed[campaignId][msg.sender] = true;
         campaign.claimedAmount += amount;
+        totalClaimsByAddress[msg.sender]++;
+        lastClaimTime[msg.sender] = block.timestamp;
 
         campaign.token.safeTransfer(msg.sender, amount);
 
@@ -169,6 +217,14 @@ contract Airdrop is Ownable, ReentrancyGuard, Pausable {
      */
     function unpause() external onlyOwner {
         _unpause();
+    }
+
+    /**
+     * @dev Update global max claims per address
+     */
+    function setGlobalMaxClaimsPerAddress(uint256 newLimit) external onlyOwner {
+        require(newLimit > 0, "Limit must be greater than 0");
+        globalMaxClaimsPerAddress = newLimit;
     }
 
     /**

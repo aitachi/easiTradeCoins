@@ -265,3 +265,22 @@ func (s *AssetService) CreateWithdrawal(withdrawal *models.Withdrawal) error {
 		return tx.Create(withdrawal).Error
 	})
 }
+
+// FreezeAssetWithTx freezes asset within an existing transaction
+func (s *AssetService) FreezeAssetWithTx(tx *gorm.DB, userID uint, currency, chain string, amount decimal.Decimal) error {
+	var asset models.UserAsset
+	if err := tx.Where("user_id = ? AND currency = ? AND chain = ?", userID, currency, chain).
+		First(&asset).Error; err != nil {
+		return err
+	}
+
+	if asset.Available.LessThan(amount) {
+		return errors.New("insufficient available balance")
+	}
+
+	asset.Available = asset.Available.Sub(amount)
+	asset.Frozen = asset.Frozen.Add(amount)
+	asset.UpdateTime = time.Now()
+
+	return tx.Save(&asset).Error
+}

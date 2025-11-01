@@ -22,6 +22,8 @@ contract Staking is Ownable, ReentrancyGuard {
         uint256 lastUpdateTime;
         uint256 rewardPerTokenStored;
         bool active;
+        uint256 rewardPoolBalance; // Track reward pool balance
+        uint256 totalRewardsPaid; // Track total rewards distributed
     }
 
     struct UserStake {
@@ -74,6 +76,18 @@ contract Staking is Ownable, ReentrancyGuard {
         uint256 reward
     );
 
+    event RewardPoolFunded(
+        uint256 indexed poolId,
+        uint256 amount,
+        uint256 newBalance
+    );
+
+    event PoolPausedInsufficientRewards(
+        uint256 indexed poolId,
+        uint256 requiredRewards,
+        uint256 availableRewards
+    );
+
     constructor() Ownable(msg.sender) {}
 
     /**
@@ -100,7 +114,9 @@ contract Staking is Ownable, ReentrancyGuard {
             totalStaked: 0,
             lastUpdateTime: block.timestamp,
             rewardPerTokenStored: 0,
-            active: true
+            active: true,
+            rewardPoolBalance: 0,
+            totalRewardsPaid: 0
         });
 
         emit PoolCreated(poolId, stakingToken, rewardToken, rewardRate, lockPeriod);
@@ -115,6 +131,10 @@ contract Staking is Ownable, ReentrancyGuard {
         StakingPool storage pool = pools[poolId];
         require(pool.active, "Pool not active");
         require(amount > 0, "Cannot stake 0");
+
+        // Check if reward pool has sufficient balance
+        uint256 estimatedRewards = calculateEstimatedRewards(poolId, amount);
+        require(pool.rewardPoolBalance >= estimatedRewards, "Insufficient reward pool balance");
 
         updateReward(poolId, msg.sender);
 
@@ -169,13 +189,18 @@ contract Staking is Ownable, ReentrancyGuard {
     function claimReward(uint256 poolId) external nonReentrant {
         updateReward(poolId, msg.sender);
 
+        StakingPool storage pool = pools[poolId];
         UserStake storage userStake = stakes[poolId][msg.sender];
         uint256 reward = userStake.rewards;
 
         require(reward > 0, "No rewards to claim");
+        require(pool.rewardPoolBalance >= reward, "Insufficient reward pool balance");
 
         userStake.rewards = 0;
-        pools[poolId].rewardToken.safeTransfer(msg.sender, reward);
+        pool.rewardPoolBalance -= reward;
+        pool.totalRewardsPaid += reward;
+
+        pool.rewardToken.safeTransfer(msg.sender, reward);
 
         emit RewardClaimed(poolId, msg.sender, reward);
     }
@@ -230,5 +255,43 @@ contract Staking is Ownable, ReentrancyGuard {
      */
     function deactivatePool(uint256 poolId) external onlyOwner {
         pools[poolId].active = false;
+    }
+
+    /**
+     * @dev Fund reward pool
+     */
+    function fundRewardPool(uint256 poolId, uint256 amount) external onlyOwner {
+        require(amount > 0, "Cannot fund 0");
+        StakingPool storage pool = pools[poolId];
+
+        pool.rewardToken.safeTransferFrom(msg.sender, address(this), amount);
+        pool.rewardPoolBalance += amount;
+
+        emit RewardPoolFunded(poolId, amount, pool.rewardPoolBalance);
+    }
+
+    /**
+     * @dev Calculate estimated rewards for a new stake
+     */
+    function calculateEstimatedRewards(uint256 poolId, uint256 amount) public view returns (uint256) {
+        StakingPool storage pool = pools[poolId];
+        if (pool.lockPeriod == 0) return 0;
+
+        // Estimate: amount * rewardRate * lockPeriod
+        return (amount * pool.rewardRate * pool.lockPeriod) / 1e18;
+    }
+
+    /**
+     * @dev Get reward pool balance
+     */
+    function getRewardPoolBalance(uint256 poolId) external view returns (uint256) {
+        return pools[poolId].rewardPoolBalance;
+    }
+
+    /**
+     * @dev Get total rewards paid
+     */
+    function getTotalRewardsPaid(uint256 poolId) external view returns (uint256) {
+        return pools[poolId].totalRewardsPaid;
     }
 }

@@ -83,6 +83,7 @@ CREATE TABLE IF NOT EXISTS orders (
     INDEX idx_status (status),
     INDEX idx_create_time (create_time DESC),
     INDEX idx_user_symbol (user_id, symbol),
+    INDEX idx_user_status_create_time (user_id, status, create_time DESC),
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -106,6 +107,7 @@ CREATE TABLE IF NOT EXISTS trades (
     INDEX idx_trade_time (trade_time DESC),
     INDEX idx_buy_order_id (buy_order_id),
     INDEX idx_sell_order_id (sell_order_id),
+    INDEX idx_symbol_trade_time (symbol, trade_time DESC),
     FOREIGN KEY (buyer_id) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY (seller_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -147,6 +149,7 @@ CREATE TABLE IF NOT EXISTS withdrawals (
     create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
     remark TEXT,
     INDEX idx_user_id (user_id),
+    INDEX idx_status (status),
     INDEX idx_status_time (status, create_time),
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

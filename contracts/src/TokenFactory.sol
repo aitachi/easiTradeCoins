@@ -23,8 +23,15 @@ contract TokenFactory is Ownable, ReentrancyGuard {
     // Fee for creating tokens (in wei)
     uint256 public creationFee = 0.01 ether;
 
+    // Maximum initial supply limit (10 billion tokens)
+    uint256 public constant MAX_INITIAL_SUPPLY = 10_000_000_000 * 10**18;
+
     // Mapping from token address to token info
     mapping(address => TokenInfo) public tokens;
+
+    // Mapping to track used names and symbols (lowercase hash to prevent duplicates)
+    mapping(bytes32 => bool) public usedNames;
+    mapping(bytes32 => bool) public usedSymbols;
 
     // Array of all created tokens
     address[] public allTokens;
@@ -59,6 +66,18 @@ contract TokenFactory is Ownable, ReentrancyGuard {
         require(bytes(name).length > 0, "Name cannot be empty");
         require(bytes(symbol).length > 0, "Symbol cannot be empty");
         require(initialSupply > 0, "Initial supply must be positive");
+        require(initialSupply <= MAX_INITIAL_SUPPLY, "Initial supply exceeds maximum");
+
+        // Check for duplicate names and symbols (case-insensitive)
+        bytes32 nameHash = keccak256(abi.encodePacked(_toLower(name)));
+        bytes32 symbolHash = keccak256(abi.encodePacked(_toLower(symbol)));
+
+        require(!usedNames[nameHash], "Token name already exists");
+        require(!usedSymbols[symbolHash], "Token symbol already exists");
+
+        // Mark name and symbol as used
+        usedNames[nameHash] = true;
+        usedSymbols[symbolHash] = true;
 
         // Deploy new token contract
         EasiToken newToken = new EasiToken(
@@ -141,5 +160,24 @@ contract TokenFactory is Ownable, ReentrancyGuard {
      */
     function getTokenInfo(address tokenAddress) external view returns (TokenInfo memory) {
         return tokens[tokenAddress];
+    }
+
+    /**
+     * @dev Convert string to lowercase for case-insensitive comparison
+     */
+    function _toLower(string memory str) internal pure returns (string memory) {
+        bytes memory bStr = bytes(str);
+        bytes memory bLower = new bytes(bStr.length);
+
+        for (uint i = 0; i < bStr.length; i++) {
+            // Convert uppercase A-Z to lowercase a-z
+            if ((uint8(bStr[i]) >= 65) && (uint8(bStr[i]) <= 90)) {
+                bLower[i] = bytes1(uint8(bStr[i]) + 32);
+            } else {
+                bLower[i] = bStr[i];
+            }
+        }
+
+        return string(bLower);
     }
 }

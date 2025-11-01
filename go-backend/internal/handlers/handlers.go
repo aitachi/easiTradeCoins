@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"net/http"
+	"os"
 	"strconv"
 	"time"
 
@@ -294,7 +295,14 @@ func generateJWT(userID uint) (string, error) {
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString([]byte("your-secret-key")) // TODO: Move to config
+
+	// Read JWT secret from environment variable
+	jwtSecret := os.Getenv("JWT_SECRET")
+	if jwtSecret == "" {
+		jwtSecret = "your-secret-key" // Fallback for development only
+	}
+
+	return token.SignedString([]byte(jwtSecret))
 }
 
 // getUserIDFromContext gets user ID from context
