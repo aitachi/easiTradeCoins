@@ -7,6 +7,7 @@ import (
 	"github.com/easitradecoins/backend/internal/database"
 	"github.com/easitradecoins/backend/internal/matching"
 	"github.com/easitradecoins/backend/internal/models"
+	"github.com/easitradecoins/backend/internal/security"
 	"gorm.io/gorm"
 )
 
@@ -14,19 +15,35 @@ import (
 type OrderService struct {
 	engine       *matching.MatchingEngine
 	assetService *AssetService
+	riskManager  *security.RiskManager
 }
 
 // NewOrderService creates a new order service
-func NewOrderService(engine *matching.MatchingEngine, assetService *AssetService) *OrderService {
+func NewOrderService(engine *matching.MatchingEngine, assetService *AssetService, riskManager *security.RiskManager) *OrderService {
 	return &OrderService{
 		engine:       engine,
 		assetService: assetService,
+		riskManager:  riskManager,
 	}
 }
 
 // CreateOrder creates a new order
 func (s *OrderService) CreateOrder(order *models.Order) (*models.Order, []*models.Trade, error) {
 	var trades []*models.Trade
+
+	// Get user for risk validation
+	var user models.User
+	if err := database.DB.First(&user, order.UserID).Error; err != nil {
+		return nil, nil, errors.New("user not found")
+	}
+
+	// Risk validation - validate order before processing
+	if s.riskManager != nil {
+		ctx := context.Background()
+		if err := s.riskManager.ValidateOrder(ctx, order, &user); err != nil {
+			return nil, nil, err
+		}
+	}
 
 	// Use database transaction for entire order creation process
 	err := database.DB.Transaction(func(tx *gorm.DB) error {
@@ -52,8 +69,16 @@ func (s *OrderService) CreateOrder(order *models.Order) (*models.Order, []*model
 			return err
 		}
 
-		// Save trades to database
+		// Save trades to database and check for self-trading
 		for _, trade := range trades {
+			// Check for self-trading before saving
+			if s.riskManager != nil {
+				isSelfTrading, reason, _ := s.riskManager.DetectSelfTrading(context.Background(), trade)
+				if isSelfTrading {
+					return errors.New("self-trading detected: " + reason)
+				}
+			}
+
 			if err := tx.Create(trade).Error; err != nil {
 				return err // Fail entire transaction if trade save fails
 			}

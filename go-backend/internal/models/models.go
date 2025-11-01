@@ -183,6 +183,53 @@ func (TradingPair) TableName() string {
 	return "trading_pairs"
 }
 
+// RiskEvent represents a risk event for logging and monitoring
+type RiskEvent struct {
+	ID          uint      `json:"id" gorm:"primaryKey"`
+	UserID      uint      `json:"user_id" gorm:"index"`
+	EventType   string    `json:"event_type" gorm:"index"`
+	Severity    string    `json:"severity"`
+	Description string    `json:"description"`
+	Details     string    `json:"details" gorm:"type:text"`
+	Action      string    `json:"action"`
+	CreateTime  time.Time `json:"create_time" gorm:"index"`
+}
+
+func (RiskEvent) TableName() string {
+	return "risk_events"
+}
+
+// Violation represents a user violation record
+type Violation struct {
+	ID          uint       `json:"id" gorm:"primaryKey"`
+	UserID      uint       `json:"user_id" gorm:"index"`
+	Type        string     `json:"type" gorm:"index"`
+	Status      string     `json:"status"`
+	Severity    int        `json:"severity"`
+	Description string     `json:"description"`
+	CreateTime  time.Time  `json:"create_time" gorm:"index"`
+	ResolveTime *time.Time `json:"resolve_time"`
+}
+
+func (Violation) TableName() string {
+	return "violations"
+}
+
+// WithdrawalWhitelist represents whitelisted withdrawal addresses
+type WithdrawalWhitelist struct {
+	ID         uint      `json:"id" gorm:"primaryKey"`
+	UserID     uint      `json:"user_id" gorm:"index"`
+	Currency   string    `json:"currency"`
+	Address    string    `json:"address" gorm:"index"`
+	Label      string    `json:"label"`
+	IsActive   bool      `json:"is_active" gorm:"default:true"`
+	CreateTime time.Time `json:"create_time"`
+}
+
+func (WithdrawalWhitelist) TableName() string {
+	return "withdrawal_whitelists"
+}
+
 // BeforeCreate hook for Order
 func (o *Order) BeforeCreate() error {
 	if o.ID == "" {

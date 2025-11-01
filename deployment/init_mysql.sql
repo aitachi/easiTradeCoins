@@ -178,6 +178,59 @@ CREATE TABLE IF NOT EXISTS audit_logs (
     INDEX idx_create_time (create_time DESC)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- Risk events table for risk control system
+CREATE TABLE IF NOT EXISTS risk_events (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id BIGINT UNSIGNED NOT NULL,
+    event_type VARCHAR(50) NOT NULL COMMENT 'order_validation/withdrawal_validation/rate_limit_exceeded/etc',
+    severity VARCHAR(20) NOT NULL COMMENT 'low/medium/high/critical',
+    description VARCHAR(500) NOT NULL,
+    details TEXT,
+    action VARCHAR(20) NOT NULL COMMENT 'allowed/blocked/flagged/frozen',
+    create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_user_id (user_id),
+    INDEX idx_event_type (event_type),
+    INDEX idx_severity (severity),
+    INDEX idx_create_time (create_time DESC),
+    INDEX idx_user_event_time (user_id, event_type, create_time DESC),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Violations table for tracking user violations
+CREATE TABLE IF NOT EXISTS violations (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id BIGINT UNSIGNED NOT NULL,
+    type VARCHAR(50) NOT NULL COMMENT 'self_trading/wash_trading/suspicious_withdrawal/etc',
+    status VARCHAR(20) NOT NULL DEFAULT 'active' COMMENT 'active/resolved',
+    severity INT NOT NULL COMMENT '1-10 severity score',
+    description VARCHAR(500) NOT NULL,
+    create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+    resolve_time DATETIME,
+    INDEX idx_user_id (user_id),
+    INDEX idx_type (type),
+    INDEX idx_status (status),
+    INDEX idx_create_time (create_time DESC),
+    INDEX idx_user_status (user_id, status),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Withdrawal whitelists table
+CREATE TABLE IF NOT EXISTS withdrawal_whitelists (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id BIGINT UNSIGNED NOT NULL,
+    currency VARCHAR(20) NOT NULL,
+    address VARCHAR(200) NOT NULL,
+    label VARCHAR(100),
+    is_active BOOLEAN DEFAULT TRUE,
+    create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_user_id (user_id),
+    INDEX idx_address (address),
+    INDEX idx_user_currency (user_id, currency),
+    INDEX idx_user_active (user_id, is_active),
+    UNIQUE KEY uk_user_currency_address (user_id, currency, address),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- Show tables
 SHOW TABLES;
 
