@@ -448,7 +448,305 @@ CREATE TABLE IF NOT EXISTS dca_executions (
     FOREIGN KEY (strategy_id) REFERENCES dca_strategies(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- ======================================================
+-- Phase 3 Features: Margin Trading, Copy Trading, Options, Community
+-- ======================================================
+
+-- Margin Trading Tables
+CREATE TABLE IF NOT EXISTS margin_accounts (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id BIGINT UNSIGNED NOT NULL UNIQUE,
+    collateral DECIMAL(36, 18) DEFAULT 0,
+    borrowed DECIMAL(36, 18) DEFAULT 0,
+    interest DECIMAL(36, 18) DEFAULT 0,
+    equity DECIMAL(36, 18) DEFAULT 0,
+    margin_level DECIMAL(10, 4) DEFAULT 0,
+    leverage INT DEFAULT 1,
+    max_leverage INT DEFAULT 10,
+    maintenance_rate DECIMAL(10, 4) DEFAULT 0.1,
+    status VARCHAR(20) DEFAULT 'active',
+    create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+    update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_user_id (user_id),
+    INDEX idx_status (status),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS margin_positions (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id BIGINT UNSIGNED NOT NULL,
+    symbol VARCHAR(20) NOT NULL,
+    side VARCHAR(10) NOT NULL,
+    entry_price DECIMAL(36, 18) NOT NULL,
+    current_price DECIMAL(36, 18) NOT NULL,
+    quantity DECIMAL(36, 18) NOT NULL,
+    leverage INT NOT NULL,
+    margin DECIMAL(36, 18) NOT NULL,
+    unrealized_pnl DECIMAL(36, 18) DEFAULT 0,
+    realized_pnl DECIMAL(36, 18) DEFAULT 0,
+    liquidation_price DECIMAL(36, 18) NOT NULL,
+    stop_loss DECIMAL(36, 18),
+    take_profit DECIMAL(36, 18),
+    status VARCHAR(20) DEFAULT 'open',
+    open_time DATETIME NOT NULL,
+    close_time DATETIME,
+    update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_user_id (user_id),
+    INDEX idx_symbol (symbol),
+    INDEX idx_status (status),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS margin_loans (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id BIGINT UNSIGNED NOT NULL,
+    currency VARCHAR(20) NOT NULL,
+    principal DECIMAL(36, 18) NOT NULL,
+    interest DECIMAL(36, 18) DEFAULT 0,
+    interest_rate DECIMAL(10, 6) NOT NULL,
+    repaid DECIMAL(36, 18) DEFAULT 0,
+    status VARCHAR(20) DEFAULT 'active',
+    borrow_time DATETIME NOT NULL,
+    repay_time DATETIME,
+    last_accrue_time DATETIME NOT NULL,
+    INDEX idx_user_id (user_id),
+    INDEX idx_status (status),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Copy Trading Tables
+CREATE TABLE IF NOT EXISTS traders (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id BIGINT UNSIGNED NOT NULL UNIQUE,
+    username VARCHAR(100) NOT NULL,
+    description TEXT,
+    roi DECIMAL(10, 4) DEFAULT 0,
+    total_pnl DECIMAL(36, 18) DEFAULT 0,
+    win_rate DECIMAL(5, 4) DEFAULT 0,
+    followers INT DEFAULT 0,
+    total_trades INT DEFAULT 0,
+    profit_trades INT DEFAULT 0,
+    loss_trades INT DEFAULT 0,
+    max_drawdown DECIMAL(10, 4) DEFAULT 0,
+    sharpe_ratio DECIMAL(10, 4) DEFAULT 0,
+    is_active BOOLEAN DEFAULT TRUE,
+    min_follow_amount DECIMAL(36, 18),
+    max_followers INT DEFAULT 1000,
+    commission_rate DECIMAL(5, 4) DEFAULT 0,
+    ranking INT DEFAULT 0,
+    verification_level INT DEFAULT 0,
+    create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+    update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_user_id (user_id),
+    INDEX idx_is_active (is_active),
+    INDEX idx_ranking (ranking),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS follow_relations (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    follower_id BIGINT UNSIGNED NOT NULL,
+    trader_id BIGINT UNSIGNED NOT NULL,
+    allocation_ratio DECIMAL(5, 4) NOT NULL,
+    max_per_trade DECIMAL(36, 18) NOT NULL,
+    stop_loss DECIMAL(10, 4),
+    take_profit DECIMAL(10, 4),
+    is_active BOOLEAN DEFAULT TRUE,
+    total_copied INT DEFAULT 0,
+    total_profit DECIMAL(36, 18) DEFAULT 0,
+    create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+    update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_follower_id (follower_id),
+    INDEX idx_trader_id (trader_id),
+    INDEX idx_is_active (is_active),
+    UNIQUE KEY uk_follower_trader (follower_id, trader_id),
+    FOREIGN KEY (follower_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (trader_id) REFERENCES traders(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS copied_orders (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    follower_id BIGINT UNSIGNED NOT NULL,
+    trader_id BIGINT UNSIGNED NOT NULL,
+    original_order_id VARCHAR(36) NOT NULL,
+    copied_order_id VARCHAR(36) NOT NULL,
+    symbol VARCHAR(20) NOT NULL,
+    side VARCHAR(10) NOT NULL,
+    quantity DECIMAL(36, 18) NOT NULL,
+    price DECIMAL(36, 18) NOT NULL,
+    status VARCHAR(20) NOT NULL,
+    pnl DECIMAL(36, 18) DEFAULT 0,
+    create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+    update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_follower_id (follower_id),
+    INDEX idx_trader_id (trader_id),
+    INDEX idx_original_order_id (original_order_id),
+    INDEX idx_copied_order_id (copied_order_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS trading_strategies (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    trader_id BIGINT UNSIGNED NOT NULL,
+    name VARCHAR(200) NOT NULL,
+    description TEXT,
+    category VARCHAR(50) NOT NULL,
+    risk_level VARCHAR(20) NOT NULL,
+    min_investment DECIMAL(36, 18) NOT NULL,
+    roi DECIMAL(10, 4) DEFAULT 0,
+    subscribers INT DEFAULT 0,
+    is_public BOOLEAN DEFAULT TRUE,
+    create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+    update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_trader_id (trader_id),
+    INDEX idx_category (category),
+    INDEX idx_is_public (is_public),
+    FOREIGN KEY (trader_id) REFERENCES traders(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Options Trading Tables
+CREATE TABLE IF NOT EXISTS option_contracts (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    symbol VARCHAR(20) NOT NULL,
+    type VARCHAR(10) NOT NULL,
+    strike_price DECIMAL(36, 18) NOT NULL,
+    premium DECIMAL(36, 18) NOT NULL,
+    quantity DECIMAL(36, 18) NOT NULL,
+    expiry DATETIME NOT NULL,
+    underlying_price DECIMAL(36, 18) NOT NULL,
+    implied_volatility DECIMAL(10, 4) DEFAULT 0.3,
+    status VARCHAR(20) DEFAULT 'active',
+    create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+    update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_symbol (symbol),
+    INDEX idx_expiry (expiry),
+    INDEX idx_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS option_positions (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id BIGINT UNSIGNED NOT NULL,
+    contract_id BIGINT UNSIGNED NOT NULL,
+    position VARCHAR(10) NOT NULL,
+    quantity DECIMAL(36, 18) NOT NULL,
+    entry_premium DECIMAL(36, 18) NOT NULL,
+    current_premium DECIMAL(36, 18) NOT NULL,
+    unrealized_pnl DECIMAL(36, 18) DEFAULT 0,
+    realized_pnl DECIMAL(36, 18) DEFAULT 0,
+    status VARCHAR(20) DEFAULT 'open',
+    open_time DATETIME NOT NULL,
+    close_time DATETIME,
+    update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_user_id (user_id),
+    INDEX idx_contract_id (contract_id),
+    INDEX idx_status (status),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (contract_id) REFERENCES option_contracts(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Trading Community Tables
+CREATE TABLE IF NOT EXISTS trading_communities (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(200) NOT NULL UNIQUE,
+    description TEXT,
+    owner_id BIGINT UNSIGNED NOT NULL,
+    member_count INT DEFAULT 0,
+    post_count INT DEFAULT 0,
+    is_public BOOLEAN DEFAULT TRUE,
+    category VARCHAR(50) NOT NULL,
+    create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+    update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_owner_id (owner_id),
+    INDEX idx_category (category),
+    INDEX idx_is_public (is_public),
+    FOREIGN KEY (owner_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS community_members (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    community_id BIGINT UNSIGNED NOT NULL,
+    user_id BIGINT UNSIGNED NOT NULL,
+    role VARCHAR(20) DEFAULT 'member',
+    join_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_community_id (community_id),
+    INDEX idx_user_id (user_id),
+    UNIQUE KEY uk_community_user (community_id, user_id),
+    FOREIGN KEY (community_id) REFERENCES trading_communities(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS posts (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    community_id BIGINT UNSIGNED NOT NULL,
+    author_id BIGINT UNSIGNED NOT NULL,
+    title VARCHAR(500) NOT NULL,
+    content TEXT NOT NULL,
+    images TEXT,
+    likes INT DEFAULT 0,
+    comments INT DEFAULT 0,
+    views INT DEFAULT 0,
+    is_pinned BOOLEAN DEFAULT FALSE,
+    tags VARCHAR(500),
+    create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+    update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_community_id (community_id),
+    INDEX idx_author_id (author_id),
+    INDEX idx_create_time (create_time DESC),
+    FOREIGN KEY (community_id) REFERENCES trading_communities(id) ON DELETE CASCADE,
+    FOREIGN KEY (author_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS comments (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    post_id BIGINT UNSIGNED NOT NULL,
+    author_id BIGINT UNSIGNED NOT NULL,
+    parent_id BIGINT UNSIGNED,
+    content TEXT NOT NULL,
+    likes INT DEFAULT 0,
+    create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+    update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_post_id (post_id),
+    INDEX idx_author_id (author_id),
+    INDEX idx_parent_id (parent_id),
+    FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE,
+    FOREIGN KEY (author_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS likes (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id BIGINT UNSIGNED NOT NULL,
+    target_type VARCHAR(20) NOT NULL,
+    target_id BIGINT UNSIGNED NOT NULL,
+    create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_user_id (user_id),
+    INDEX idx_target (target_type, target_id),
+    UNIQUE KEY uk_user_target (user_id, target_type, target_id),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS trading_signals (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    author_id BIGINT UNSIGNED NOT NULL,
+    community_id BIGINT UNSIGNED NOT NULL,
+    symbol VARCHAR(20) NOT NULL,
+    type VARCHAR(10) NOT NULL,
+    entry_price DECIMAL(36, 18) NOT NULL,
+    stop_loss DECIMAL(36, 18) NOT NULL,
+    take_profit1 DECIMAL(36, 18) NOT NULL,
+    take_profit2 DECIMAL(36, 18),
+    take_profit3 DECIMAL(36, 18),
+    status VARCHAR(20) DEFAULT 'active',
+    result DECIMAL(10, 4),
+    create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+    update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_author_id (author_id),
+    INDEX idx_community_id (community_id),
+    INDEX idx_symbol (symbol),
+    INDEX idx_status (status),
+    FOREIGN KEY (author_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (community_id) REFERENCES trading_communities(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- Show tables
 SHOW TABLES;
 
-SELECT 'MySQL Database initialized successfully with advanced trading features!' as status;
+SELECT 'MySQL Database initialized successfully with all Phase 2-3 features!' as status;
