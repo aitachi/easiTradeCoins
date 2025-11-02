@@ -241,7 +241,214 @@ CREATE TABLE IF NOT EXISTS withdrawal_whitelists (
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- ======================================================
+-- Advanced Trading Features Tables
+-- ======================================================
+
+-- OCO (One-Cancels-Other) Orders table
+CREATE TABLE IF NOT EXISTS oco_orders (
+    id VARCHAR(100) PRIMARY KEY,
+    user_id BIGINT UNSIGNED NOT NULL,
+    symbol VARCHAR(20) NOT NULL,
+    side VARCHAR(4) NOT NULL COMMENT 'buy/sell',
+    quantity DECIMAL(36, 18) NOT NULL,
+    stop_loss_order_id VARCHAR(36) NOT NULL,
+    stop_loss_price DECIMAL(36, 18) NOT NULL,
+    take_profit_order_id VARCHAR(36) NOT NULL,
+    take_profit_price DECIMAL(36, 18) NOT NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'pending' COMMENT 'pending/filled/cancelled',
+    triggered_order_id VARCHAR(36),
+    trigger_time DATETIME,
+    create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+    update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_user_id (user_id),
+    INDEX idx_symbol (symbol),
+    INDEX idx_status (status),
+    INDEX idx_stop_loss_order (stop_loss_order_id),
+    INDEX idx_take_profit_order (take_profit_order_id),
+    INDEX idx_create_time (create_time DESC),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Iceberg Orders table
+CREATE TABLE IF NOT EXISTS iceberg_orders (
+    id VARCHAR(100) PRIMARY KEY,
+    user_id BIGINT UNSIGNED NOT NULL,
+    symbol VARCHAR(20) NOT NULL,
+    side VARCHAR(4) NOT NULL COMMENT 'buy/sell',
+    type VARCHAR(20) NOT NULL COMMENT 'limit only',
+    price DECIMAL(36, 18) NOT NULL,
+    total_quantity DECIMAL(36, 18) NOT NULL,
+    display_quantity DECIMAL(36, 18) NOT NULL,
+    executed_quantity DECIMAL(36, 18) DEFAULT 0.000000000000000000,
+    current_child_order_id VARCHAR(36),
+    min_display_quantity DECIMAL(36, 18) NOT NULL,
+    variance_percent DECIMAL(5, 2) DEFAULT 0.00,
+    status VARCHAR(20) NOT NULL DEFAULT 'pending' COMMENT 'pending/active/filled/cancelled',
+    create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+    update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_user_id (user_id),
+    INDEX idx_symbol (symbol),
+    INDEX idx_status (status),
+    INDEX idx_create_time (create_time DESC),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- TWAP (Time-Weighted Average Price) Orders table
+CREATE TABLE IF NOT EXISTS twap_orders (
+    id VARCHAR(100) PRIMARY KEY,
+    user_id BIGINT UNSIGNED NOT NULL,
+    symbol VARCHAR(20) NOT NULL,
+    side VARCHAR(4) NOT NULL COMMENT 'buy/sell',
+    type VARCHAR(20) NOT NULL COMMENT 'market/limit',
+    total_quantity DECIMAL(36, 18) NOT NULL,
+    executed_quantity DECIMAL(36, 18) DEFAULT 0.000000000000000000,
+    executed_amount DECIMAL(36, 18) DEFAULT 0.000000000000000000,
+    average_price DECIMAL(36, 18) DEFAULT 0.000000000000000000,
+    duration BIGINT NOT NULL COMMENT 'Duration in seconds',
+    intervals INT NOT NULL COMMENT 'Number of intervals',
+    start_time DATETIME NOT NULL,
+    end_time DATETIME NOT NULL,
+    next_slice DATETIME NOT NULL,
+    limit_price DECIMAL(36, 18),
+    price_tolerance DECIMAL(5, 2) DEFAULT 5.00,
+    status VARCHAR(20) NOT NULL DEFAULT 'pending' COMMENT 'pending/active/completed/cancelled/failed',
+    completed_slices INT DEFAULT 0,
+    failed_slices INT DEFAULT 0,
+    create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+    update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_user_id (user_id),
+    INDEX idx_symbol (symbol),
+    INDEX idx_status (status),
+    INDEX idx_start_time (start_time),
+    INDEX idx_create_time (create_time DESC),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- TWAP Slices table (execution history)
+CREATE TABLE IF NOT EXISTS twap_slices (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    twap_order_id VARCHAR(100) NOT NULL,
+    order_id VARCHAR(36),
+    slice_number INT NOT NULL,
+    quantity DECIMAL(36, 18) NOT NULL,
+    price DECIMAL(36, 18) NOT NULL,
+    status VARCHAR(20) NOT NULL COMMENT 'pending/executing/completed/failed',
+    scheduled_at DATETIME NOT NULL,
+    executed_at DATETIME,
+    error TEXT,
+    create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_twap_order (twap_order_id),
+    INDEX idx_order_id (order_id),
+    INDEX idx_status (status),
+    INDEX idx_scheduled_at (scheduled_at),
+    FOREIGN KEY (twap_order_id) REFERENCES twap_orders(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Grid Trading Strategies table
+CREATE TABLE IF NOT EXISTS grid_strategies (
+    id VARCHAR(100) PRIMARY KEY,
+    user_id BIGINT UNSIGNED NOT NULL,
+    symbol VARCHAR(20) NOT NULL,
+    lower_price DECIMAL(36, 18) NOT NULL,
+    upper_price DECIMAL(36, 18) NOT NULL,
+    grid_num INT NOT NULL COMMENT 'Number of grids',
+    total_investment DECIMAL(36, 18) NOT NULL,
+    quantity_per_grid DECIMAL(36, 18) NOT NULL,
+    total_profit DECIMAL(36, 18) DEFAULT 0.000000000000000000,
+    completed_grids INT DEFAULT 0,
+    active_buy_orders INT DEFAULT 0,
+    active_sell_orders INT DEFAULT 0,
+    auto_restart BOOLEAN DEFAULT TRUE,
+    stop_loss DECIMAL(36, 18),
+    take_profit DECIMAL(36, 18),
+    status VARCHAR(20) NOT NULL DEFAULT 'pending' COMMENT 'pending/active/paused/stopped/completed',
+    create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+    update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    start_time DATETIME,
+    stop_time DATETIME,
+    INDEX idx_user_id (user_id),
+    INDEX idx_symbol (symbol),
+    INDEX idx_status (status),
+    INDEX idx_create_time (create_time DESC),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Grid Levels table
+CREATE TABLE IF NOT EXISTS grid_levels (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    strategy_id VARCHAR(100) NOT NULL,
+    level INT NOT NULL,
+    price DECIMAL(36, 18) NOT NULL,
+    buy_order_id VARCHAR(36),
+    sell_order_id VARCHAR(36),
+    buy_filled BOOLEAN DEFAULT FALSE,
+    sell_filled BOOLEAN DEFAULT FALSE,
+    profit DECIMAL(36, 18) DEFAULT 0.000000000000000000,
+    create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+    update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_strategy (strategy_id),
+    INDEX idx_buy_order (buy_order_id),
+    INDEX idx_sell_order (sell_order_id),
+    INDEX idx_level (level),
+    FOREIGN KEY (strategy_id) REFERENCES grid_strategies(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- DCA (Dollar Cost Averaging) Strategies table
+CREATE TABLE IF NOT EXISTS dca_strategies (
+    id VARCHAR(100) PRIMARY KEY,
+    user_id BIGINT UNSIGNED NOT NULL,
+    symbol VARCHAR(20) NOT NULL,
+    amount_per_period DECIMAL(36, 18) NOT NULL,
+    frequency VARCHAR(20) NOT NULL COMMENT 'daily/weekly/monthly',
+    day_of_week INT COMMENT '0-6 for weekly',
+    day_of_month INT COMMENT '1-31 for monthly',
+    hour_of_day INT DEFAULT 0,
+    max_price DECIMAL(36, 18),
+    min_price DECIMAL(36, 18),
+    stop_loss DECIMAL(36, 18),
+    take_profit DECIMAL(36, 18),
+    start_date DATETIME NOT NULL,
+    end_date DATETIME,
+    next_run DATETIME NOT NULL,
+    total_invested DECIMAL(36, 18) DEFAULT 0.000000000000000000,
+    total_quantity DECIMAL(36, 18) DEFAULT 0.000000000000000000,
+    average_cost DECIMAL(36, 18) DEFAULT 0.000000000000000000,
+    total_executions INT DEFAULT 0,
+    success_executions INT DEFAULT 0,
+    failed_executions INT DEFAULT 0,
+    status VARCHAR(20) NOT NULL DEFAULT 'pending' COMMENT 'pending/active/paused/stopped/completed',
+    create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+    update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_user_id (user_id),
+    INDEX idx_symbol (symbol),
+    INDEX idx_status (status),
+    INDEX idx_next_run (next_run),
+    INDEX idx_create_time (create_time DESC),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- DCA Executions table (execution history)
+CREATE TABLE IF NOT EXISTS dca_executions (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    strategy_id VARCHAR(100) NOT NULL,
+    order_id VARCHAR(36),
+    amount DECIMAL(36, 18) NOT NULL,
+    price DECIMAL(36, 18) NOT NULL,
+    quantity DECIMAL(36, 18) NOT NULL,
+    status VARCHAR(20) NOT NULL COMMENT 'pending/success/failed/skipped',
+    reason TEXT,
+    scheduled_at DATETIME NOT NULL,
+    executed_at DATETIME,
+    create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_strategy (strategy_id),
+    INDEX idx_order_id (order_id),
+    INDEX idx_status (status),
+    INDEX idx_scheduled_at (scheduled_at),
+    FOREIGN KEY (strategy_id) REFERENCES dca_strategies(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- Show tables
 SHOW TABLES;
 
-SELECT 'MySQL Database initialized successfully!' as status;
+SELECT 'MySQL Database initialized successfully with advanced trading features!' as status;
