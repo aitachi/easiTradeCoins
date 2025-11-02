@@ -60,3 +60,4 @@ coverage.html
 *.temp
 tmp/
 temp/
+.claude/
