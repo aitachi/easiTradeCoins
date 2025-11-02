@@ -1,10 +1,12 @@
-# Build stage
+# ================================
+# Multi-stage Dockerfile for Go Backend
+# ================================
 FROM golang:1.21-alpine AS builder
 
-WORKDIR /app
+# Install build dependencies
+RUN apk add --no-cache git gcc musl-dev make
 
-# Install dependencies
-RUN apk add --no-cache git make
+WORKDIR /app
 
 # Copy go mod files
 COPY go.mod go.sum ./
@@ -13,22 +15,45 @@ RUN go mod download
 # Copy source code
 COPY . .
 
-# Build
-RUN CGO_ENABLED=0 GOOS=linux go build -o server ./cmd/server
+# Build the application with optimizations
+RUN CGO_ENABLED=1 GOOS=linux go build -a -installsuffix cgo \
+    -ldflags="-w -s" -o server ./cmd/server
 
+# ================================
 # Runtime stage
+# ================================
 FROM alpine:latest
 
-WORKDIR /app
+# Install runtime dependencies
+RUN apk --no-cache add ca-certificates tzdata curl
 
-# Install ca-certificates for HTTPS
-RUN apk --no-cache add ca-certificates
+# Set timezone
+ENV TZ=UTC
+
+# Create non-root user
+RUN addgroup -g 1000 app && \
+    adduser -D -u 1000 -G app app
+
+WORKDIR /app
 
 # Copy binary from builder
 COPY --from=builder /app/server .
 
+# Copy configuration files if they exist
+COPY --from=builder /app/configs ./configs 2>/dev/null || true
+
+# Change ownership
+RUN chown -R app:app /app
+
+# Switch to non-root user
+USER app
+
 # Expose ports
 EXPOSE 8080 8081
 
-# Run
+# Health check
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD curl -f http://localhost:8080/health || exit 1
+
+# Run the application
 CMD ["./server"]
