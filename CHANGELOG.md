@@ -259,6 +259,6 @@ MIT License - See LICENSE file for details
 ## Support
 
 For issues, questions, or contributions:
-- GitHub Issues: https://github.com/yourusername/EasiTradeCoins/issues
+- GitHub Issues: https://github.com/aitachi/EasiTradeCoins/issues
 - Documentation: See README.md and PROJECT_SUMMARY.md
-- Email: support@easitradecoins.com
+- Email: 44158892@qq.com

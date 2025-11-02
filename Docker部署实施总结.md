@@ -464,4 +464,4 @@ EasiTradeCoins/
 
 **完成度**: 100% (部署文件部分)
 
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
+🤖 Generated with [Aitachi Development](https://github.com/aitachi/claude-code)

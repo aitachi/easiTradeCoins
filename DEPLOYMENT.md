@@ -524,4 +524,4 @@ docker-compose exec postgres psql -U postgres -d easitradecoins -c "\dt"
 生成时间: 2025-01-XX
 版本: 1.0.0
 
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
+🤖 Generated with [Aitachi Development](https://github.com/aitachi/claude-code)

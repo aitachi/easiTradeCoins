@@ -117,7 +117,7 @@ A professional, full-stack cryptocurrency trading platform built with **Foundry 
 
 1. **Clone the repository**
 ```bash
-git clone https://github.com/yourusername/EasiTradeCoins.git
+git clone https://github.com/aitachi/EasiTradeCoins.git
 cd EasiTradeCoins
 ```
 
@@ -403,9 +403,9 @@ MIT License - see [LICENSE](LICENSE) file
 
 ## 📧 Contact
 
-- Email: support@easitradecoins.com
+- Email: 44158892@qq.com
 - Twitter: [@EasiTradeCoins](https://twitter.com/EasiTradeCoins)
-- Discord: [Join our community](https://discord.gg/easitradecoins)
+- Discord: [Join our community](https://github.com/aitachi/easiTradeCoins)
 
 ## 🙏 Acknowledgments
 

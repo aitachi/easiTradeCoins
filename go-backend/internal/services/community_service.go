@@ -3,11 +3,9 @@ package services
 import (
 	"context"
 	"errors"
-	"fmt"
 	"sync"
 	"time"
 
-	"github.com/easitradecoins/backend/internal/database"
 	"github.com/shopspring/decimal"
 	"gorm.io/gorm"
 )

@@ -594,7 +594,7 @@ Solidity Contracts:
 - DeFi深度集成
 - 专业衍生品工具
 
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
+🤖 Generated with [Aitachi Development](https://github.com/aitachi/claude-code)
 ```
 
 ---
@@ -667,4 +667,4 @@ Solidity Contracts:
 **总体完成度**: 40.3% (29/72项功能)
 **部署状态**: 生产就绪 ✅
 
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
+🤖 Generated with [Aitachi Development](https://github.com/aitachi/claude-code)

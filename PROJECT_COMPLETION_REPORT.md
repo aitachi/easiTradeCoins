@@ -683,7 +683,7 @@ EasiTradeCoins项目已成功完成所有计划功能的开发和测试。项目
 *本报告是EasiTradeCoins项目的官方完成报告。所有数据和测试结果真实有效,可供审查。*
 
 **联系方式**:
-- Email: support@easitradecoins.com
+- Email: 44158892@qq.com
 - GitHub: https://github.com/easitradecoins
 - Telegram: @easitradecoins
 

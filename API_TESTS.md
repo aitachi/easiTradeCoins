@@ -542,5 +542,5 @@ docker-compose logs --tail=100 backend
 ## Support
 
 For issues or questions:
-- GitHub: https://github.com/yourusername/EasiTradeCoins/issues
-- Email: support@easitradecoins.com
+- GitHub: https://github.com/aitachi/EasiTradeCoins/issues
+- Email: 44158892@qq.com

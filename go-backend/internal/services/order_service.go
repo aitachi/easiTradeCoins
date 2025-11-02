@@ -73,9 +73,9 @@ func (s *OrderService) CreateOrder(order *models.Order) (*models.Order, []*model
 		for _, trade := range trades {
 			// Check for self-trading before saving
 			if s.riskManager != nil {
-				isSelfTrading, reason, _ := s.riskManager.DetectSelfTrading(context.Background(), trade)
+				isSelfTrading := s.riskManager.DetectSelfTrading(trade.BuyerID, trade.SellerID)
 				if isSelfTrading {
-					return errors.New("self-trading detected: " + reason)
+					return errors.New("self-trading detected: buyer and seller are the same")
 				}
 			}
 

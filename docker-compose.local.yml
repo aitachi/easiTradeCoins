@@ -1,0 +1,165 @@
+# ================================
+# EasiTradeCoins - Local Development Configuration
+# 本机开发环境配置 - 使用本机已有服务
+# ================================
+version: '3.8'
+
+services:
+  # ================================
+  # Go Backend Application
+  # 连接本机已有的 PostgreSQL, Redis, Kafka, Elasticsearch, MySQL
+  # ================================
+  backend:
+    build:
+      context: ./go-backend
+      dockerfile: Dockerfile
+      args:
+        BUILD_VERSION: ${BUILD_VERSION:-latest}
+    container_name: easitrade-backend
+    environment:
+      # Application
+      APP_ENV: ${APP_ENV:-development}
+      APP_PORT: ${APP_PORT:-8080}
+      APP_METRICS_PORT: ${APP_METRICS_PORT:-8081}
+
+      # PostgreSQL Database (本机)
+      # socialfi/socialfi_pg_pass_2024 @ localhost:5432
+      DB_HOST: host.docker.internal
+      DB_PORT: 5432
+      DB_USER: socialfi
+      DB_PASSWORD: socialfi_pg_pass_2024
+      DB_NAME: socialfi
+      DB_SSL_MODE: disable
+      DB_MAX_CONNECTIONS: 100
+      DB_MAX_IDLE_CONNECTIONS: 20
+
+      # MySQL Database (本机) - For migration compatibility
+      # root/(empty) @ localhost:3306
+      MYSQL_HOST: host.docker.internal
+      MYSQL_PORT: 3306
+      MYSQL_USER: root
+      MYSQL_PASSWORD: ""
+      MYSQL_DB: easitradecoins
+
+      # Redis (本机 - 无密码)
+      # localhost:6379
+      REDIS_HOST: host.docker.internal
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ""
+      REDIS_DB: 0
+      REDIS_MAX_RETRIES: 3
+      REDIS_POOL_SIZE: 50
+
+      # Elasticsearch (本机 - 无认证)
+      # localhost:9200
+      ELASTICSEARCH_HOST: host.docker.internal
+      ELASTICSEARCH_PORT: 9200
+      ELASTICSEARCH_SCHEME: http
+
+      # Kafka (本机 - 无认证)
+      # localhost:9092
+      KAFKA_BROKERS: host.docker.internal:9092
+      KAFKA_TOPIC_ORDERS: orders
+      KAFKA_TOPIC_TRADES: trades
+      KAFKA_TOPIC_NOTIFICATIONS: notifications
+      KAFKA_TOPIC_RISK_EVENTS: risk_events
+      KAFKA_TOPIC_MARKET_DATA: market_data
+      KAFKA_GROUP_ID: easitrade-consumer-group
+
+      # Security
+      JWT_SECRET: ${JWT_SECRET:-your-super-secret-jwt-key-change-in-production}
+      JWT_EXPIRATION: ${JWT_EXPIRATION:-24h}
+      BCRYPT_COST: ${BCRYPT_COST:-10}
+
+      # Blockchain (Sepolia Testnet)
+      ETHEREUM_RPC_URL: ${ETHEREUM_RPC_URL:-https://sepolia.infura.io/v3/YOUR-PROJECT-ID}
+      ETHEREUM_CHAIN_ID: ${ETHEREUM_CHAIN_ID:-11155111}
+      PRIVATE_KEY: ${PRIVATE_KEY:-}
+      CONTRACT_ADDRESS_STAKING: ${CONTRACT_ADDRESS_STAKING:-}
+      CONTRACT_ADDRESS_AIRDROP: ${CONTRACT_ADDRESS_AIRDROP:-}
+      CONTRACT_ADDRESS_TOKEN_FACTORY: ${CONTRACT_ADDRESS_TOKEN_FACTORY:-}
+      CONTRACT_ADDRESS_DEX_AGGREGATOR: ${CONTRACT_ADDRESS_DEX_AGGREGATOR:-}
+      CONTRACT_ADDRESS_LIQUIDITY_MINING: ${CONTRACT_ADDRESS_LIQUIDITY_MINING:-}
+
+      # Risk Management
+      ORDER_RATE_LIMIT: ${ORDER_RATE_LIMIT:-10}
+      ORDER_RATE_WINDOW: ${ORDER_RATE_WINDOW:-60s}
+      MAX_PRICE_DEVIATION: ${MAX_PRICE_DEVIATION:-0.20}
+      WITHDRAWAL_DAILY_LIMIT: ${WITHDRAWAL_DAILY_LIMIT:-100000}
+      LARGE_WITHDRAWAL_THRESHOLD: ${LARGE_WITHDRAWAL_THRESHOLD:-10000}
+
+      # Feature Flags
+      ENABLE_WEBSOCKET: ${ENABLE_WEBSOCKET:-true}
+      ENABLE_STOP_ORDER_MONITOR: ${ENABLE_STOP_ORDER_MONITOR:-true}
+      ENABLE_RISK_MANAGER: ${ENABLE_RISK_MANAGER:-true}
+      ENABLE_SWAGGER: ${ENABLE_SWAGGER:-true}
+
+      # Monitoring
+      PROMETHEUS_ENABLED: ${PROMETHEUS_ENABLED:-true}
+      LOG_LEVEL: ${LOG_LEVEL:-debug}
+
+    ports:
+      - "${APP_PORT:-8080}:8080"
+      - "${APP_METRICS_PORT:-8081}:8081"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - easitrade-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+  # ================================
+  # Nginx Reverse Proxy (Optional)
+  # ================================
+  nginx:
+    image: nginx:1.25-alpine
+    container_name: easitrade-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deployment/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./deployment/nginx/ssl:/etc/nginx/ssl:ro
+      - nginx_logs:/var/log/nginx
+    depends_on:
+      - backend
+    networks:
+      - easitrade-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:80/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+    profiles:
+      - with-nginx
+
+# ================================
+# Volumes
+# ================================
+volumes:
+  nginx_logs:
+    driver: local
+
+# ================================
+# Networks
+# ================================
+networks:
+  easitrade-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.26.0.0/16

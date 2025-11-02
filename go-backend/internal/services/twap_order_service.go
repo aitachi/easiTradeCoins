@@ -7,7 +7,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/easitradecoins/backend/internal/database"
 	"github.com/easitradecoins/backend/internal/models"
 	"github.com/shopspring/decimal"
 	"gorm.io/gorm"

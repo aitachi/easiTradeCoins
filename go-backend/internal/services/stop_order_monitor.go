@@ -1,7 +1,6 @@
 package services
 
 import (
-	"context"
 	"fmt"
 	"sync"
 	"time"
@@ -255,10 +254,15 @@ func (m *StopOrderMonitor) getCurrentPrice(symbol string) (decimal.Decimal, erro
 		Order("trade_time DESC").
 		First(&lastTrade).Error; err != nil {
 		// If no trades, try to get from order book (best bid/ask)
-		orderBook := m.orderService.GetOrderBookDepth(symbol, 1)
-		if len(orderBook) > 0 {
+		bids, asks := m.orderService.GetOrderBookDepth(symbol, 1)
+		if len(bids) > 0 && len(asks) > 0 {
 			// Use mid price
-			return orderBook[0].Price, nil
+			midPrice := bids[0].Price.Add(asks[0].Price).Div(decimal.NewFromInt(2))
+			return midPrice, nil
+		} else if len(bids) > 0 {
+			return bids[0].Price, nil
+		} else if len(asks) > 0 {
+			return asks[0].Price, nil
 		}
 		return decimal.Zero, fmt.Errorf("no price data available for %s", symbol)
 	}

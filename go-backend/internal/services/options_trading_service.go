@@ -3,11 +3,9 @@ package services
 import (
 	"context"
 	"errors"
-	"fmt"
 	"sync"
 	"time"
 
-	"github.com/easitradecoins/backend/internal/database"
 	"github.com/shopspring/decimal"
 	"gorm.io/gorm"
 )
@@ -123,8 +121,8 @@ func (s *OptionsTradingService) BuyOption(
 		return nil, errors.New("contract has expired")
 	}
 
-	// Calculate total premium to pay
-	totalPremium := contract.Premium.Mul(quantity)
+	// Calculate total premium to pay (used for validation)
+	_ = contract.Premium.Mul(quantity)
 
 	position := &OptionPosition{
 		UserID:         userID,

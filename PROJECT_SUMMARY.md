@@ -525,4 +525,4 @@ MIT License
 
 **创建时间**: 2025-11-01
 **版本**: v2.0
-**作者**: EasiTradeCoins Team
+**作者**: Aitachi

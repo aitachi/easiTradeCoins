@@ -570,7 +570,7 @@ feat: 完整实现Phase 2核心交易功能 (5 advanced order types + WebSocket 
 - 实时数据推送
 - 全自动交易策略
 
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
+🤖 Generated with [Aitachi Development](https://github.com/aitachi/claude-code)
 ```
 
 ---
@@ -677,4 +677,4 @@ feat: 完整实现Phase 2核心交易功能 (5 advanced order types + WebSocket 
 **总体完成度**: 31.9% (23/72项功能已实现)
 **部署状态**: 生产就绪 ✅
 
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
+🤖 Generated with [Aitachi Development](https://github.com/aitachi/claude-code)
