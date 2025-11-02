@@ -1,3 +1,7 @@
+//Author:Aitachi
+//Email:44158892@qq.com
+//Date: 11-02-2025 17
+
 import UserModel, { User, UserSecurity } from '../models/User';
 import { AuthUtils } from '../utils/auth';
 import redis from '../database/redis';

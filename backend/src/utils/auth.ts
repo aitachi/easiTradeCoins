@@ -1,3 +1,7 @@
+//Author:Aitachi
+//Email:44158892@qq.com
+//Date: 11-02-2025 17
+
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
